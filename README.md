@@ -67,17 +67,55 @@ Fields can be separated by commas or semicolons, and names are matched ignoring 
 
 ### Nested fields
 
-Use dots to reach inside objects. A path into a list applies to every item:
+Use dots to reach inside objects. A path into a list applies to every item.
+
+Given an action that returns:
+
+```json
+{
+  "id": 42,
+  "name": "Ada",
+  "email": "ada@example.com",
+  "address": { "street": "12 St James's Sq", "city": "London", "zip": "SW1Y" },
+  "orders": [
+    { "id": 1, "total": 10.5, "status": "paid" },
+    { "id": 2, "total": 99, "status": "open" }
+  ]
+}
+```
+
+Request:
 
 ```http
 GET /api/customers/42?fields=id,address.city,orders.total
 ```
 
+Response:
+
 ```json
-{ "id": 42, "address": { "city": "London" }, "orders": [ { "total": 10.5 }, { "total": 99 } ] }
+{
+  "id": 42,
+  "address": { "city": "London" },
+  "orders": [
+    { "total": 10.5 },
+    { "total": 99 }
+  ]
+}
 ```
 
-Asking for `address` returns the whole object, even if `address.city` is also in the list.
+Asking for `address` returns the whole object, even if `address.city` is also in the list:
+
+```http
+GET /api/customers/42?fields=address,address.city
+```
+
+Response:
+
+```json
+{
+  "address": { "street": "12 St James's Sq", "city": "London", "zip": "SW1Y" }
+}
+```
 
 ### Lists
 
