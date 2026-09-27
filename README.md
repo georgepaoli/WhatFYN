@@ -2,30 +2,35 @@
 
 > Json with four hundred fields? What fields do you need?
 
-An ASP.NET Core Web API custom output formatter that lets clients ask for **only the JSON fields they need**. It doesn't change your controllers: the client sends two headers, and the response comes back with only the fields it asked for.
+An ASP.NET Core Web API output formatter that lets clients ask for **only the JSON fields they need**. It doesn't change your controllers: the client lists the fields it wants in a request header, and the response comes back with only those fields.
 
 ## How it works
 
-The formatter registers a vendor media type, `application/x-wfyn+json`. When a request asks for that type through `Accept` and lists the wanted fields in `x-only-fields`, the formatter:
+WhatFYN adds an output formatter that sits right before your app's normal JSON formatter. When a request carries the `x-only-fields` header, the formatter:
 
-1. serializes the action result with Newtonsoft.Json (camelCase, nulls ignored),
+1. serializes the action result with System.Text.Json, using your app's MVC JSON options (camelCase by default),
 2. removes every top-level property that isn't in the list,
 3. writes the trimmed JSON to the response.
 
-Requests that don't ask for this media type keep going to your normal JSON formatter.
+Requests without the header go to your normal JSON formatter, untouched. String and stream results keep their own formatters.
 
 ## Usage
 
-The project is a single file: [`src/CustonOutputFormatter.cs`](src/CustonOutputFormatter.cs). Copy it into your ASP.NET Core project, reference `Newtonsoft.Json`, and register the formatter:
+Requires .NET 8 or later.
+
+The package isn't on NuGet yet. To use it now, reference the project [`src/WhatFYN`](src/WhatFYN) or build the package yourself with `dotnet pack src/WhatFYN -c Release`.
+
+Register it with MVC:
 
 ```csharp
-services.AddMvc(options =>
-{
-    options.OutputFormatters.Insert(0, new WhatFYN.CustomOutputFormatter());
-});
+builder.Services.AddControllers().AddWhatFYN();
 ```
 
-The constructors also accept your own `JsonSerializerSettings` and/or `Encoding`.
+The header name can be changed:
+
+```csharp
+builder.Services.AddControllers().AddWhatFYN(o => o.HeaderName = "x-fields");
+```
 
 ### Example
 
@@ -39,7 +44,6 @@ Request only `id` and `name`:
 
 ```http
 GET /api/customers/42
-Accept: application/x-wfyn+json
 x-only-fields: id;name
 ```
 
@@ -63,7 +67,15 @@ WhatFYN is meant as the lightweight option. It has no extra dependencies, works 
 
 ## Limitations
 
-- The `x-only-fields` header is **required** with this media type. Without it, the formatter throws `InvalidOperationException`.
-- Field names are separated by semicolons, match case-sensitively, and must be in **camelCase**, the same as the serialized output.
+- Field names are separated by semicolons, match case-sensitively, and must be in the serialized casing (camelCase by default).
 - Only **top-level** properties are filtered. Nested paths such as `address.city` aren't supported.
-- The action result must serialize to a JSON **object**. A collection or a single value (string, number, etc.) makes it throw.
+- Only object results are filtered. Collections and single values are returned unchanged.
+- Serialization always uses System.Text.Json. An app that switched MVC to Newtonsoft.Json still gets System.Text.Json output for filtered responses, so Newtonsoft attributes such as `[JsonProperty]` are ignored there.
+
+## Development
+
+```sh
+dotnet build
+dotnet test
+dotnet test --filter "FullyQualifiedName~FieldFilterTests.Returns_only_the_requested_fields"
+```

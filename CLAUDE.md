@@ -10,21 +10,24 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-WhatFYN ("What Fields You Need") is an ASP.NET Core Web API custom output formatter that lets clients request only the JSON fields they need from a response.
+WhatFYN ("What Fields You Need") is an ASP.NET Core output formatter that trims JSON responses to the fields the client asks for. The README covers usage and current limitations. Keep its Limitations section in sync when behavior changes.
 
-The repo holds just one source file, [src/CustonOutputFormatter.cs](src/CustonOutputFormatter.cs). The file name misspells "Custom"; the class inside is `CustomOutputFormatter`. The repo has no `.csproj`, solution, tests, or sample host. It cannot be built on its own. To compile or try it, add the file to an ASP.NET Core project that references `Newtonsoft.Json` and register it:
+## Commands
 
-```csharp
-services.AddMvc(o => o.OutputFormatters.Insert(0, new WhatFYN.CustomOutputFormatter()));
+```sh
+dotnet build
+dotnet test                                   # runs on net8.0 and net10.0
+dotnet test --filter "FullyQualifiedName~FieldFilterTests.Returns_only_the_requested_fields"
+dotnet test -f net10.0                        # single target framework
+dotnet pack src/WhatFYN -c Release
 ```
 
-## How the formatter works
+The repo's `nuget.config` clears the package sources and keeps only nuget.org. The user's machine-level NuGet config includes a private feed that returns 401, and without the override restore fails.
 
-- It derives from `TextOutputFormatter` and only handles the vendor media type `application/x-wfyn+json`. Content negotiation selects it only when the client sends `Accept: application/x-wfyn+json`. `CanWriteType` returns `true` for any type.
-- The client must also send the `x-only-fields` header, a **semicolon-separated** list of field names (e.g. `id;name`). If the header is missing, the formatter throws `InvalidOperationException`.
-- It serializes the response object with Newtonsoft.Json, using camelCase property names and ignoring nulls by default (overridable through the constructors). It parses the result into a `JObject` and removes every top-level property not named in the header.
+## Architecture
 
-Known limitations to keep in mind when changing it:
-- Only **top-level** properties are filtered. It has no nested-path support.
-- `JObject.Parse` throws if the action returns a collection or primitive, because the root must be a JSON object.
-- Field names match exactly and case-sensitively against the camelCased output, so clients must send camelCase names.
+- `src/WhatFYN` targets net8.0 and net10.0. It has no package dependencies, only the `Microsoft.AspNetCore.App` framework reference.
+- `AddWhatFYN()` (on `IMvcBuilder`) registers an `IConfigureOptions<MvcOptions>`. That setup builds `WhatFYNOutputFormatter` with the app's MVC `JsonOptions` and inserts it **right before the first output formatter that supports `application/json`**, so string and stream results keep their own formatters. The extension lives in the `Microsoft.Extensions.DependencyInjection` namespace, following the ASP.NET convention.
+- The formatter handles normal JSON media types. It opts in per request through `CanWriteResult`, which returns `false` unless the request asks for fields. When it returns `false`, MVC falls through to the app's regular JSON formatter, so requests without fields are untouched.
+- Filtering serializes the result to a `JsonNode` with System.Text.Json, prunes it, and writes it back out.
+- Tests (`tests/WhatFYN.Tests`) spin up an in-memory app with `TestServer` and real controllers from the test assembly (`TestApp.cs`). Output formatters only run for MVC controllers, not minimal API endpoints, so new test scenarios need a controller action.
