@@ -36,6 +36,17 @@ public class CustomersController : ControllerBase
     [HttpGet("many")]
     public Customer[] Many() => [Samples.Ada, Samples.Alan];
 
+    [HttpGet("stream")]
+    public async IAsyncEnumerable<Customer> Stream()
+    {
+        await Task.Yield();
+        yield return Samples.Ada;
+        yield return Samples.Alan;
+    }
+
+    [HttpGet("empty")]
+    public Customer[] EmptyList() => [];
+
     [HttpGet("text")]
     public string Text() => "hello";
 

@@ -79,6 +79,10 @@ GET /api/customers/42?fields=id,address.city,orders.total
 
 Asking for `address` returns the whole object, even if `address.city` is also in the list.
 
+### Lists
+
+When the action returns a list (including `IAsyncEnumerable<T>`), the fields apply to every item. Single values such as a number or `null` come back unchanged.
+
 ## What it does (and doesn't) save
 
 WhatFYN trims the **response payload**: less data over the wire and less for the client to parse. It does **not** make the server do less work. The action still loads and builds the full object, all four hundred fields, before the formatter throws most of them away.
@@ -93,7 +97,6 @@ WhatFYN is meant as the lightweight option. It has no extra dependencies, works 
 
 ## Limitations
 
-- Only object results are filtered. Collections and single values are returned unchanged.
 - Serialization always uses System.Text.Json. An app that switched MVC to Newtonsoft.Json still gets System.Text.Json output for filtered responses, so Newtonsoft attributes such as `[JsonProperty]` are ignored there.
 
 ## Development
