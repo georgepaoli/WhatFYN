@@ -49,6 +49,18 @@ Response:
 { "id": 42, "name": "Ada" }
 ```
 
+## What it does (and doesn't) save
+
+WhatFYN trims the **response payload**: less data over the wire and less for the client to parse. It does **not** make the server do less work. The action still loads and builds the full object, all four hundred fields, before the formatter throws most of them away.
+
+If the real cost is in the query itself, filter at the data layer instead:
+
+- a dynamic `Select` projection in Entity Framework,
+- [OData](https://learn.microsoft.com/odata/) `$select`,
+- [GraphQL](https://graphql.org/).
+
+WhatFYN is meant as the lightweight option. It has no extra dependencies, works with the controllers you already have, and fits when bandwidth or client-side parsing is the bottleneck.
+
 ## Limitations
 
 - The `x-only-fields` header is **required** with this media type. Without it, the formatter throws `InvalidOperationException`.
