@@ -46,14 +46,7 @@ public sealed class WhatFYNOutputFormatter : TextOutputFormatter
         var node = JsonSerializer.SerializeToNode(context.Object, context.ObjectType ?? typeof(object), _serializerOptions);
 
         if (node is JsonObject root)
-        {
-            var fields = GetRequestedFields(context.HttpContext.Request)!;
-
-            var keysToRemove = root.Select(p => p.Key).Where(k => !fields.Contains(k)).ToList();
-
-            foreach (var key in keysToRemove)
-                root.Remove(key);
-        }
+            GetRequestedFields(context.HttpContext.Request)!.Apply(root);
 
         return context.HttpContext.Response.WriteAsync(
             node?.ToJsonString(_serializerOptions) ?? "null",
@@ -62,20 +55,9 @@ public sealed class WhatFYNOutputFormatter : TextOutputFormatter
     }
 
     // The fields from the header or, failing that, the query string; null when neither lists any.
-    private HashSet<string>? GetRequestedFields(HttpRequest request)
+    private FieldSelection? GetRequestedFields(HttpRequest request)
     {
-        return ParseFields(request.Headers[_options.HeaderName].ToString())
-            ?? ParseFields(request.Query[_options.QueryParameterName].ToString());
-    }
-
-    private static readonly char[] Separators = [',', ';'];
-
-    private static HashSet<string>? ParseFields(string value)
-    {
-        var fields = new HashSet<string>(
-            value.Split(Separators, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
-            StringComparer.OrdinalIgnoreCase);
-
-        return fields.Count > 0 ? fields : null;
+        return FieldSelection.Parse(request.Headers[_options.HeaderName].ToString())
+            ?? FieldSelection.Parse(request.Query[_options.QueryParameterName].ToString());
     }
 }

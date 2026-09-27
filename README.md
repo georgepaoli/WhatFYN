@@ -9,7 +9,7 @@ An ASP.NET Core Web API output formatter that lets clients ask for **only the JS
 WhatFYN adds an output formatter that sits right before your app's normal JSON formatter. When a request lists fields in the `x-only-fields` header or the `fields` query parameter, the formatter:
 
 1. serializes the action result with System.Text.Json, using your app's MVC JSON options (camelCase by default),
-2. removes every top-level property that isn't in the list,
+2. removes every property that isn't in the list, at any depth,
 3. writes the trimmed JSON to the response.
 
 Requests that don't list any fields (or send an empty list) go to your normal JSON formatter, untouched. If a request has both, the header wins. String and stream results keep their own formatters.
@@ -65,6 +65,20 @@ Response:
 
 Fields can be separated by commas or semicolons, and names are matched ignoring case, so `ID;Name` works too.
 
+### Nested fields
+
+Use dots to reach inside objects. A path into a list applies to every item:
+
+```http
+GET /api/customers/42?fields=id,address.city,orders.total
+```
+
+```json
+{ "id": 42, "address": { "city": "London" }, "orders": [ { "total": 10.5 }, { "total": 99 } ] }
+```
+
+Asking for `address` returns the whole object, even if `address.city` is also in the list.
+
 ## What it does (and doesn't) save
 
 WhatFYN trims the **response payload**: less data over the wire and less for the client to parse. It does **not** make the server do less work. The action still loads and builds the full object, all four hundred fields, before the formatter throws most of them away.
@@ -79,7 +93,6 @@ WhatFYN is meant as the lightweight option. It has no extra dependencies, works 
 
 ## Limitations
 
-- Only **top-level** properties are filtered. Nested paths such as `address.city` aren't supported.
 - Only object results are filtered. Collections and single values are returned unchanged.
 - Serialization always uses System.Text.Json. An app that switched MVC to Newtonsoft.Json still gets System.Text.Json output for filtered responses, so Newtonsoft attributes such as `[JsonProperty]` are ignored there.
 
