@@ -48,13 +48,13 @@ Request only `id` and `name`:
 
 ```http
 GET /api/customers/42
-x-only-fields: id;name
+x-only-fields: id,name
 ```
 
 or, easier to try in a browser and friendlier to HTTP caches, since the URL alone identifies the response:
 
 ```http
-GET /api/customers/42?fields=id;name
+GET /api/customers/42?fields=id,name
 ```
 
 Response:
@@ -62,6 +62,8 @@ Response:
 ```json
 { "id": 42, "name": "Ada" }
 ```
+
+Fields can be separated by commas or semicolons, and names are matched ignoring case, so `ID;Name` works too.
 
 ## What it does (and doesn't) save
 
@@ -77,7 +79,6 @@ WhatFYN is meant as the lightweight option. It has no extra dependencies, works 
 
 ## Limitations
 
-- Field names are separated by semicolons, match case-sensitively, and must be in the serialized casing (camelCase by default).
 - Only **top-level** properties are filtered. Nested paths such as `address.city` aren't supported.
 - Only object results are filtered. Collections and single values are returned unchanged.
 - Serialization always uses System.Text.Json. An app that switched MVC to Newtonsoft.Json still gets System.Text.Json output for filtered responses, so Newtonsoft attributes such as `[JsonProperty]` are ignored there.

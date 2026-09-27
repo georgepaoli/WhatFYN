@@ -36,7 +36,7 @@ public sealed class WhatFYNOutputFormatter : TextOutputFormatter
     /// <inheritdoc />
     public override bool CanWriteResult(OutputFormatterCanWriteContext context)
     {
-        return GetFieldList(context.HttpContext.Request) is not null
+        return GetRequestedFields(context.HttpContext.Request) is not null
             && base.CanWriteResult(context);
     }
 
@@ -47,9 +47,9 @@ public sealed class WhatFYNOutputFormatter : TextOutputFormatter
 
         if (node is JsonObject root)
         {
-            var fields = GetFieldList(context.HttpContext.Request)!.Split(';');
+            var fields = GetRequestedFields(context.HttpContext.Request)!;
 
-            var keysToRemove = root.Select(p => p.Key).Except(fields).ToList();
+            var keysToRemove = root.Select(p => p.Key).Where(k => !fields.Contains(k)).ToList();
 
             foreach (var key in keysToRemove)
                 root.Remove(key);
@@ -61,17 +61,21 @@ public sealed class WhatFYNOutputFormatter : TextOutputFormatter
             context.HttpContext.RequestAborted);
     }
 
-    // The raw field list from the header or, failing that, the query string; null when neither has one.
-    private string? GetFieldList(HttpRequest request)
+    // The fields from the header or, failing that, the query string; null when neither lists any.
+    private HashSet<string>? GetRequestedFields(HttpRequest request)
     {
-        var header = request.Headers[_options.HeaderName].ToString();
-        if (!string.IsNullOrWhiteSpace(header))
-            return header;
+        return ParseFields(request.Headers[_options.HeaderName].ToString())
+            ?? ParseFields(request.Query[_options.QueryParameterName].ToString());
+    }
 
-        var query = request.Query[_options.QueryParameterName].ToString();
-        if (!string.IsNullOrWhiteSpace(query))
-            return query;
+    private static readonly char[] Separators = [',', ';'];
 
-        return null;
+    private static HashSet<string>? ParseFields(string value)
+    {
+        var fields = new HashSet<string>(
+            value.Split(Separators, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+            StringComparer.OrdinalIgnoreCase);
+
+        return fields.Count > 0 ? fields : null;
     }
 }

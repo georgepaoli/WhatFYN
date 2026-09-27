@@ -108,6 +108,40 @@ public class FieldFilterTests
         JsonAssert.HasExactly(json, "email");
     }
 
+    [Theory]
+    [InlineData("id,name")]
+    [InlineData("id;name")]
+    [InlineData(" id , name ")]
+    [InlineData("id,;name,")]
+    public async Task Accepts_comma_or_semicolon_separators(string fields)
+    {
+        await using var app = await TestApp.StartAsync();
+
+        var json = await app.GetJsonAsync("customers/one", fields);
+
+        JsonAssert.HasExactly(json, "id", "name");
+    }
+
+    [Fact]
+    public async Task Field_names_are_case_insensitive()
+    {
+        await using var app = await TestApp.StartAsync();
+
+        var json = await app.GetJsonAsync("customers/one?fields=ID,Name,EMAIL");
+
+        JsonAssert.HasExactly(json, "id", "name", "email");
+    }
+
+    [Fact]
+    public async Task Only_separators_returns_the_full_object()
+    {
+        await using var app = await TestApp.StartAsync();
+
+        var json = await app.GetJsonAsync("customers/one", ",;,");
+
+        JsonAssert.HasExactly(json, "id", "name", "email", "address", "orders");
+    }
+
     [Fact]
     public async Task Header_name_is_configurable()
     {
