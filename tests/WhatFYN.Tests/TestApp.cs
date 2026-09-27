@@ -13,6 +13,8 @@ public record Order(int Id, decimal Total, string Status);
 
 public record Customer(int Id, string Name, string Email, Address Address, Order[] Orders);
 
+public record Note(string Title, string Body, string? Missing, Address Place);
+
 public static class Samples
 {
     public static Customer Ada { get; } = new(
@@ -47,6 +49,13 @@ public class CustomersController : ControllerBase
     [HttpGet("empty")]
     public Customer[] EmptyList() => [];
 
+    [HttpGet("note")]
+    public Note Note() => new(
+        "Olá \"José\" & <co>",
+        "line1\nline2\ttab 😀",
+        null,
+        new Address("Rua \"A\"", "São Paulo", "01000"));
+
     [HttpGet("text")]
     public string Text() => "hello";
 
@@ -69,13 +78,17 @@ public sealed class TestApp : IAsyncDisposable
 
     public HttpClient Client { get; }
 
-    public static async Task<TestApp> StartAsync(Action<WhatFYNOptions>? configure = null)
+    public static async Task<TestApp> StartAsync(
+        Action<WhatFYNOptions>? configure = null,
+        Action<JsonOptions>? configureJson = null)
     {
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
         builder.Services.AddControllers()
             .AddApplicationPart(typeof(TestApp).Assembly)
             .AddWhatFYN(configure);
+        if (configureJson is not null)
+            builder.Services.Configure(configureJson);
 
         var app = builder.Build();
         app.MapControllers();

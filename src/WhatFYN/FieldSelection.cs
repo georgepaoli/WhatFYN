@@ -1,4 +1,4 @@
-using System.Text.Json.Nodes;
+using System.Text.Json;
 
 namespace WhatFYN;
 
@@ -55,27 +55,57 @@ internal sealed class FieldSelection
     }
 
     /// <summary>
-    /// Removes every property the selection doesn't name. Arrays are applied item by item;
-    /// other values are left alone.
+    /// Copies <paramref name="json"/> to <paramref name="writer"/>, leaving out every property the selection
+    /// doesn't name. Arrays are filtered item by item; other values are copied as they are.
     /// </summary>
-    public void Apply(JsonNode? node)
+    public void WriteFiltered(ReadOnlySpan<byte> json, Utf8JsonWriter writer, JsonReaderOptions readerOptions)
     {
-        switch (node)
-        {
-            case JsonObject obj:
-                foreach (var key in obj.Select(p => p.Key).ToList())
-                {
-                    if (!_fields.TryGetValue(key, out var child))
-                        obj.Remove(key);
-                    else
-                        child?.Apply(obj[key]);
-                }
-                break;
+        var reader = new Utf8JsonReader(json, readerOptions);
+        reader.Read();
+        WriteValue(ref reader, writer, json, this);
+    }
 
-            case JsonArray array:
-                foreach (var item in array)
-                    Apply(item);
-                break;
+    // Writes the value the reader is on and leaves the reader on its last token.
+    // A null selection keeps the whole value.
+    private static void WriteValue(ref Utf8JsonReader reader, Utf8JsonWriter writer, ReadOnlySpan<byte> json, FieldSelection? selection)
+    {
+        var isContainer = reader.TokenType is JsonTokenType.StartObject or JsonTokenType.StartArray;
+
+        // Kept whole: copy the bytes as they are. Indented output needs re-writing so nesting lines up.
+        if (!isContainer || (selection is null && !writer.Options.Indented))
+        {
+            var start = (int)reader.TokenStartIndex;
+            reader.Skip();
+            writer.WriteRawValue(json[start..(int)reader.BytesConsumed], skipInputValidation: true);
+            return;
         }
+
+        if (reader.TokenType == JsonTokenType.StartArray)
+        {
+            writer.WriteStartArray();
+            while (reader.Read() && reader.TokenType != JsonTokenType.EndArray)
+                WriteValue(ref reader, writer, json, selection);
+            writer.WriteEndArray();
+            return;
+        }
+
+        writer.WriteStartObject();
+        while (reader.Read() && reader.TokenType != JsonTokenType.EndObject)
+        {
+            var name = reader.GetString()!;
+            reader.Read();
+
+            FieldSelection? child = null;
+            if (selection is null || selection._fields.TryGetValue(name, out child))
+            {
+                writer.WritePropertyName(name);
+                WriteValue(ref reader, writer, json, child);
+            }
+            else
+            {
+                reader.Skip();
+            }
+        }
+        writer.WriteEndObject();
     }
 }

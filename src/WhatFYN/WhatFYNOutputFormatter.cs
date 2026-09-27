@@ -1,6 +1,6 @@
+using System.Buffers;
 using System.Text;
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Formatters;
 
@@ -14,6 +14,11 @@ public sealed class WhatFYNOutputFormatter : TextOutputFormatter
 {
     private readonly JsonSerializerOptions _serializerOptions;
     private readonly WhatFYNOptions _options;
+    private readonly JsonReaderOptions _readerOptions;
+    private readonly JsonWriterOptions _writerOptions;
+
+    // HttpContext.Items key for the request's parsed field list, so it's parsed once per request.
+    private readonly object _selectionKey = new();
 
     /// <summary>
     /// Creates the formatter.
@@ -24,6 +29,19 @@ public sealed class WhatFYNOutputFormatter : TextOutputFormatter
     {
         _serializerOptions = serializerOptions ?? throw new ArgumentNullException(nameof(serializerOptions));
         _options = options ?? throw new ArgumentNullException(nameof(options));
+
+        _readerOptions = new JsonReaderOptions { MaxDepth = serializerOptions.MaxDepth };
+        _writerOptions = new JsonWriterOptions
+        {
+            Encoder = serializerOptions.Encoder,
+            Indented = serializerOptions.WriteIndented,
+            SkipValidation = true,
+#if NET9_0_OR_GREATER
+            IndentCharacter = serializerOptions.IndentCharacter,
+            IndentSize = serializerOptions.IndentSize,
+            NewLine = serializerOptions.NewLine,
+#endif
+        };
 
         SupportedMediaTypes.Add("application/json");
         SupportedMediaTypes.Add("text/json");
@@ -36,33 +54,44 @@ public sealed class WhatFYNOutputFormatter : TextOutputFormatter
     /// <inheritdoc />
     public override bool CanWriteResult(OutputFormatterCanWriteContext context)
     {
-        return GetRequestedFields(context.HttpContext.Request) is not null
+        return GetRequestedFields(context.HttpContext) is not null
             && base.CanWriteResult(context);
     }
 
     /// <inheritdoc />
     public override async Task WriteResponseBodyAsync(OutputFormatterWriteContext context, Encoding selectedEncoding)
     {
-        var node = await SerializeToNodeAsync(context.Object, context.ObjectType ?? typeof(object), context.HttpContext.RequestAborted);
+        var httpContext = context.HttpContext;
+        var selection = GetRequestedFields(httpContext)!;
+        var json = await SerializeAsync(context.Object, context.ObjectType ?? typeof(object), httpContext.RequestAborted);
 
-        GetRequestedFields(context.HttpContext.Request)!.Apply(node);
+        if (selectedEncoding.CodePage == Encoding.UTF8.CodePage)
+        {
+            await using var writer = new Utf8JsonWriter(httpContext.Response.Body, _writerOptions);
+            selection.WriteFiltered(json.Span, writer, _readerOptions);
+            await writer.FlushAsync(httpContext.RequestAborted);
+            return;
+        }
 
-        await context.HttpContext.Response.WriteAsync(
-            node?.ToJsonString(_serializerOptions) ?? "null",
+        var buffer = new ArrayBufferWriter<byte>();
+        using (var writer = new Utf8JsonWriter(buffer, _writerOptions))
+            selection.WriteFiltered(json.Span, writer, _readerOptions);
+
+        await httpContext.Response.WriteAsync(
+            Encoding.UTF8.GetString(buffer.WrittenSpan),
             selectedEncoding,
-            context.HttpContext.RequestAborted);
+            httpContext.RequestAborted);
     }
 
-    private async Task<JsonNode?> SerializeToNodeAsync(object? value, Type type, CancellationToken cancellationToken)
+    private async Task<ReadOnlyMemory<byte>> SerializeAsync(object? value, Type type, CancellationToken cancellationToken)
     {
         if (!IsAsyncEnumerable(type))
-            return JsonSerializer.SerializeToNode(value, type, _serializerOptions);
+            return JsonSerializer.SerializeToUtf8Bytes(value, type, _serializerOptions);
 
-        // System.Text.Json only serializes IAsyncEnumerable<T> asynchronously, so buffer it first.
-        using var buffer = new MemoryStream();
+        // System.Text.Json only serializes IAsyncEnumerable<T> asynchronously.
+        var buffer = new MemoryStream();
         await JsonSerializer.SerializeAsync(buffer, value, type, _serializerOptions, cancellationToken);
-        buffer.Position = 0;
-        return JsonNode.Parse(buffer);
+        return buffer.GetBuffer().AsMemory(0, (int)buffer.Length);
     }
 
     private static bool IsAsyncEnumerable(Type type)
@@ -72,9 +101,16 @@ public sealed class WhatFYNOutputFormatter : TextOutputFormatter
     }
 
     // The fields from the header or, failing that, the query string; null when neither lists any.
-    private FieldSelection? GetRequestedFields(HttpRequest request)
+    private FieldSelection? GetRequestedFields(HttpContext httpContext)
     {
-        return FieldSelection.Parse(request.Headers[_options.HeaderName].ToString())
+        if (httpContext.Items.TryGetValue(_selectionKey, out var cached))
+            return (FieldSelection?)cached;
+
+        var request = httpContext.Request;
+        var selection = FieldSelection.Parse(request.Headers[_options.HeaderName].ToString())
             ?? FieldSelection.Parse(request.Query[_options.QueryParameterName].ToString());
+
+        httpContext.Items[_selectionKey] = selection;
+        return selection;
     }
 }
