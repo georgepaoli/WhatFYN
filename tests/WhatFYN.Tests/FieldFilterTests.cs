@@ -69,6 +69,46 @@ public class FieldFilterTests
     }
 
     [Fact]
+    public async Task Empty_header_returns_the_full_object()
+    {
+        await using var app = await TestApp.StartAsync();
+
+        var json = await app.GetJsonAsync("customers/one", " ");
+
+        JsonAssert.HasExactly(json, "id", "name", "email", "address", "orders");
+    }
+
+    [Fact]
+    public async Task Reads_fields_from_the_query_string()
+    {
+        await using var app = await TestApp.StartAsync();
+
+        var json = await app.GetJsonAsync("customers/one?fields=id;name");
+
+        JsonAssert.HasExactly(json, "id", "name");
+    }
+
+    [Fact]
+    public async Task Header_wins_over_the_query_string()
+    {
+        await using var app = await TestApp.StartAsync();
+
+        var json = await app.GetJsonAsync("customers/one?fields=id", "name");
+
+        JsonAssert.HasExactly(json, "name");
+    }
+
+    [Fact]
+    public async Task Query_parameter_name_is_configurable()
+    {
+        await using var app = await TestApp.StartAsync(o => o.QueryParameterName = "select");
+
+        var json = await app.GetJsonAsync("customers/one?select=email");
+
+        JsonAssert.HasExactly(json, "email");
+    }
+
+    [Fact]
     public async Task Header_name_is_configurable()
     {
         await using var app = await TestApp.StartAsync(o => o.HeaderName = "x-fields");

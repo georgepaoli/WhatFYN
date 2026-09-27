@@ -36,7 +36,7 @@ public sealed class WhatFYNOutputFormatter : TextOutputFormatter
     /// <inheritdoc />
     public override bool CanWriteResult(OutputFormatterCanWriteContext context)
     {
-        return context.HttpContext.Request.Headers.ContainsKey(_options.HeaderName)
+        return GetFieldList(context.HttpContext.Request) is not null
             && base.CanWriteResult(context);
     }
 
@@ -47,7 +47,7 @@ public sealed class WhatFYNOutputFormatter : TextOutputFormatter
 
         if (node is JsonObject root)
         {
-            var fields = context.HttpContext.Request.Headers[_options.HeaderName].ToString().Split(';');
+            var fields = GetFieldList(context.HttpContext.Request)!.Split(';');
 
             var keysToRemove = root.Select(p => p.Key).Except(fields).ToList();
 
@@ -59,5 +59,19 @@ public sealed class WhatFYNOutputFormatter : TextOutputFormatter
             node?.ToJsonString(_serializerOptions) ?? "null",
             selectedEncoding,
             context.HttpContext.RequestAborted);
+    }
+
+    // The raw field list from the header or, failing that, the query string; null when neither has one.
+    private string? GetFieldList(HttpRequest request)
+    {
+        var header = request.Headers[_options.HeaderName].ToString();
+        if (!string.IsNullOrWhiteSpace(header))
+            return header;
+
+        var query = request.Query[_options.QueryParameterName].ToString();
+        if (!string.IsNullOrWhiteSpace(query))
+            return query;
+
+        return null;
     }
 }

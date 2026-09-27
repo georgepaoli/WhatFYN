@@ -2,17 +2,17 @@
 
 > Json with four hundred fields? What fields do you need?
 
-An ASP.NET Core Web API output formatter that lets clients ask for **only the JSON fields they need**. It doesn't change your controllers: the client lists the fields it wants in a request header, and the response comes back with only those fields.
+An ASP.NET Core Web API output formatter that lets clients ask for **only the JSON fields they need**. It doesn't change your controllers: the client lists the fields it wants in a request header or the query string, and the response comes back with only those fields.
 
 ## How it works
 
-WhatFYN adds an output formatter that sits right before your app's normal JSON formatter. When a request carries the `x-only-fields` header, the formatter:
+WhatFYN adds an output formatter that sits right before your app's normal JSON formatter. When a request lists fields in the `x-only-fields` header or the `fields` query parameter, the formatter:
 
 1. serializes the action result with System.Text.Json, using your app's MVC JSON options (camelCase by default),
 2. removes every top-level property that isn't in the list,
 3. writes the trimmed JSON to the response.
 
-Requests without the header go to your normal JSON formatter, untouched. String and stream results keep their own formatters.
+Requests that don't list any fields (or send an empty list) go to your normal JSON formatter, untouched. If a request has both, the header wins. String and stream results keep their own formatters.
 
 ## Usage
 
@@ -26,10 +26,14 @@ Register it with MVC:
 builder.Services.AddControllers().AddWhatFYN();
 ```
 
-The header name can be changed:
+The header and query parameter names can be changed:
 
 ```csharp
-builder.Services.AddControllers().AddWhatFYN(o => o.HeaderName = "x-fields");
+builder.Services.AddControllers().AddWhatFYN(o =>
+{
+    o.HeaderName = "x-fields";
+    o.QueryParameterName = "select";
+});
 ```
 
 ### Example
@@ -45,6 +49,12 @@ Request only `id` and `name`:
 ```http
 GET /api/customers/42
 x-only-fields: id;name
+```
+
+or, easier to try in a browser and friendlier to HTTP caches, since the URL alone identifies the response:
+
+```http
+GET /api/customers/42?fields=id;name
 ```
 
 Response:
