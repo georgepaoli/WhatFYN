@@ -18,7 +18,11 @@ Requests that don't list any fields (or send an empty list) go to your normal JS
 
 Requires .NET 8 or later.
 
-The package isn't on NuGet yet. To use it now, reference the project [`src/WhatFYN`](src/WhatFYN) or build the package yourself with `dotnet pack src/WhatFYN -c Release`.
+Install the [NuGet package](https://www.nuget.org/packages/WhatFYN):
+
+```sh
+dotnet add package WhatFYN
+```
 
 Register it with MVC:
 
@@ -144,3 +148,7 @@ dotnet build
 dotnet test
 dotnet test --filter "FullyQualifiedName~FieldFilterTests.Returns_only_the_requested_fields"
 ```
+
+## License
+
+[MIT](https://github.com/georgepaoli/WhatFYN/blob/master/LICENSE)

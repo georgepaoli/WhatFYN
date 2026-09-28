@@ -7,13 +7,21 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
 
     <PackageId>WhatFYN</PackageId>
-    <Version>2.0.0</Version>
+    <Version>1.0.0</Version>
     <Authors>George Paoli</Authors>
     <Description>ASP.NET Core output formatter that returns only the JSON fields the client asks for.</Description>
     <PackageTags>aspnetcore;json;output-formatter;fields;partial-response</PackageTags>
     <PackageProjectUrl>https://github.com/georgepaoli/WhatFYN</PackageProjectUrl>
     <RepositoryUrl>https://github.com/georgepaoli/WhatFYN</RepositoryUrl>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <Copyright>Copyright (c) 2018 George Paoli</Copyright>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(GITHUB_ACTIONS)' == 'true'">
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
   </PropertyGroup>
 
   <ItemGroup>
