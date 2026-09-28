@@ -22,6 +22,8 @@ dotnet test -f net10.0                        # single target framework
 dotnet pack src/WhatFYN -c Release
 ```
 
+Releases are published by `.github/workflows/release.yml` when a `v*` tag is pushed (e.g. `v1.0.1`). The package version comes from the tag, not from `<Version>` in the csproj. The workflow authenticates to nuget.org with Trusted Publishing (`NuGet/login`, GitHub OIDC), so the repo stores no API key, only the `NUGET_USER` secret. `ci.yml` runs the tests on every push to master and on every PR.
+
 The repo's `nuget.config` clears the package sources and keeps only nuget.org. The user's machine-level NuGet config includes a private feed that returns 401, and without the override restore fails.
 
 ## Architecture
